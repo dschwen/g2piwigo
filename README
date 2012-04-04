@@ -1,0 +1,12 @@
+The script accesses the G2 and piwigo sql databases and updates piwigo after a local quick sync 
+
+* first copy the contents of g2data/albums to piwigo/galleries
+* generate piwigo thumbnails (in the piwigo admin panel)
+* then syncronize in the piwigo admin panel to seed the db.
+* now run the script in the piwigo/galleries folder as:
+
+find |grep -v /thumbnail | cut -c3- | PATHTOSCRIPT/convertcomments.pl g2_db_password piwigo_db_password
+
+(this will pass a list of paths to the actual images, while filtering out the thumbnail subfolders)
+
+You will need to install and activate the "Extended Comments" plugin for the album descriptions to show up correctly!
