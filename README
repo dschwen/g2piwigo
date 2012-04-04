@@ -5,7 +5,7 @@ The script accesses the G2 and piwigo sql databases and updates piwigo after a l
 * then syncronize in the piwigo admin panel to seed the db.
 * now run the script in the piwigo/galleries folder as:
 
-find |grep -v /thumbnail | cut -c3- | PATHTOSCRIPT/convertcomments.pl g2_db_password piwigo_db_password
+find |grep -v /thumbnail | cut -c3- | PATHTOSCRIPT/convertcomments.pl g2_database g2_db_password piwigo_database piwigo_db_password
 
 (this will pass a list of paths to the actual images, while filtering out the thumbnail subfolders)
 
