@@ -22,6 +22,7 @@ $db2 = DBI->connect( $ds2, $ARGV[2], $ARGV[3],
 @ids = ( 7,0,0,0,0,0 );
 # piwigo uppercats
 @uct = ( "NULL",0,0,0,0,0 );
+@ranks = ();
 
 while(<STDIN>) {
   s/\n//g;
@@ -34,15 +35,15 @@ while(<STDIN>) {
 
   # get id and title/summary/description of tail element in path  
   $query = "
-    select 
+    SELECT 
       f.g_id, i.g_title, i.g_summary, i.g_description, i.g_canContainChildren, a.g_orderWeight, a.g_viewCount 
-    from 
+    FROM 
       g2_FileSystemEntity f, g2_ChildEntity c, g2_Item i, g2_ItemAttributesMap a 
-    where 
-      i.g_id = f.g_id and 
-      f.g_id = c.g_id and 
-      i.g_id = a.g_itemId and
-      c.g_parentId = ".$db1->quote($parentId)." and 
+    WHERE 
+      i.g_id = f.g_id AND 
+      f.g_id = c.g_id AND 
+      i.g_id = a.g_itemId AND
+      c.g_parentId = ".$db1->quote($parentId)." AND 
       f.g_pathComponent=".$db1->quote($path[$level-1]).";
     ";
   $sth = $db1->prepare($query);
@@ -71,7 +72,7 @@ while(<STDIN>) {
       }
     }
 
-    $query = "update piwigo_images set name=".$db2->quote($title).", comment=".$db2->quote($comment)." where path = ".$db2->quote("./galleries/".$dir)." ";
+    $query = "UPDATE piwigo_images SET name=".$db2->quote($title).", comment=".$db2->quote($comment)." WHERE path = ".$db2->quote("./galleries/".$dir)." ";
     print "$query\n";
     $sth = $db2->prepare($query);
     $sth->execute;
@@ -91,8 +92,8 @@ while(<STDIN>) {
 
     # get piwigo category id
     $uc = "= ".$uct[$level-1];
-    $uc = "is null" if( $uct[$level-1] eq "NULL" );
-    $query = "select id from piwigo_categories where dir = ".$db2->quote($path[$level-1])." and id_uppercat $uc";
+    $uc = "IS NULL" if( $uct[$level-1] eq "NULL" );
+    $query = "SELECT id FROM piwigo_categories WHERE dir = ".$db2->quote($path[$level-1])." AND id_uppercat $uc";
     $sth = $db2->prepare($query);
     $sth->execute;
     @row = $sth->fetchrow();
@@ -100,7 +101,15 @@ while(<STDIN>) {
     $id = $row[0];
     $uct[$level] = $id;
 
-    $query = "update piwigo_categories set name=".$db2->quote($title).", comment=".$db2->quote($comment)." where id = $id";
+    # build global_rank string
+    $grank = "";
+    for($i=1;$i<$level;$i++ ) {
+      $grank .= $ranks[$i].".";
+    }
+    $grank .= $weight;
+    $ranks[$level]=$weight;
+
+    $query = "UPDATE piwigo_categories SET name=".$db2->quote($title).", comment=".$db2->quote($comment).", rank=$weight, global_rank=".$db2->quote($grank)." WHERE id = $id";
     print "$query\n";
     $sth = $db2->prepare($query);
     $sth->execute;
@@ -113,7 +122,5 @@ while(<STDIN>) {
       WHERE c.g_id = d1.g_id 
       AND d1.g_derivativeSourceId=d2.g_id 
       AND c.g_parentId = ".$ids[$level];
- 
-    # set sort weight
  }
 }
