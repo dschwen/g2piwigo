@@ -58,6 +58,7 @@ while(<STDIN>) {
   $weight = $row[5];
   $views = $row[6];
   $ids[$level] = $row[0];
+  $pid{$row[0]}=$dir;
 
   if( $row[4] == 0 ) {
     # image
@@ -122,5 +123,29 @@ while(<STDIN>) {
       WHERE c.g_id = d1.g_id 
       AND d1.g_derivativeSourceId=d2.g_id 
       AND c.g_parentId = ".$ids[$level];
+    $sth = $db1->prepare($query);
+    $sth->execute;
+    ($hid{$id}) = $sth->fetchrow();
+    $sth->finish;
  }
+}
+
+# apply highlites as representative images
+
+while(($key, $value) = each(%hid)) {
+  print "$key $value $pid{$value}\n";  
+
+  # get piwigo picture id
+  $query="SELECT id from piwigo_images WHERE path = ".$db2->quote("./galleries/".$pid{$value});
+  print "$query\n";
+  $sth = $db2->prepare($query);
+  $sth->execute;
+  ($id) = $sth->fetchrow();
+  $sth->finish;
+
+  $query = "UPDATE piwigo_categories SET representative_picture_id =".$db2->quote($id)." WHERE id = ".$db2->quote($key);
+  print "$query\n";
+  $sth = $db2->prepare($query);
+  $sth->execute;
+  $sth->finish;
 }

@@ -1,3 +1,21 @@
+== G2Piwigo ==
+
+G2Piwigo converts an existiung menalto Gallery2 installation to a shiny new Piwigo (http://www.piwigo.org) gallery.
+The following properties are preserved:
+
+* Titles, summaries, and descriptions for images and (sub)albums
+* Sort order for (sub)albums
+* Highlight images for (sub)albums
+
+The following properties are not (yet) converted:
+
+* comments
+* ratings
+* keywords
+* thumbnails
+
+=== Running the script ===
+
 The script accesses the G2 and piwigo sql databases and updates piwigo after a local quick sync 
 
 * first copy the contents of g2data/albums to piwigo/galleries
@@ -9,4 +27,9 @@ find |grep -v /thumbnail | cut -c3- | PATHTOSCRIPT/convertcomments.pl g2_databas
 
 (this will pass a list of paths to the actual images, while filtering out the thumbnail subfolders)
 
-You will need to install and activate the "Extended Comments" plugin for the album descriptions to show up correctly!
+=== Finishing up ===
+
+* You will need to install and activate the "Extended Comments" plugin for the album descriptions to show up correctly!
+* In the admin interface under tools->maintenance click on "Update albums information" and "Update photos information"
+
+Done!
