@@ -18,12 +18,8 @@ $ds2 = "dbi:mysql:wikimini_piwigo:localhost:3306";
 $db2 = DBI->connect( $ds2, $ARGV[2], $ARGV[3],
                   { PrintError => 1}) || die $DBI::errstr;
 
-# Gallery2 parent Ids
-$sth = $db1->prepare("select c.g_id from g2_ChildEntity c, g2_Item i where c.g_parentId = 0 and c.g_id = i.g_id");
-$sth->execute;
-($root) = $sth->fetchrow();
-$sth->finish;
-@ids = ( $root,0,0,0,0,0 );
+# Gallery2 parent Ids (root is always 7!)
+@ids = ( 7,0,0,0,0,0 );
 # piwigo uppercats
 @uct = ( "NULL",0,0,0,0,0 );
 
@@ -39,12 +35,13 @@ while(<STDIN>) {
   # get id and title/summary/description of tail element in path  
   $query = "
     select 
-      f.g_id, i.g_title, i.g_summary, i.g_description, i.g_canContainChildren 
+      f.g_id, i.g_title, i.g_summary, i.g_description, i.g_canContainChildren, a.g_orderWeight, a.g_viewCount 
     from 
-      g2_FileSystemEntity f, g2_ChildEntity c, g2_Item i 
+      g2_FileSystemEntity f, g2_ChildEntity c, g2_Item i, g2_ItemAttributesMap a 
     where 
       i.g_id = f.g_id and 
       f.g_id = c.g_id and 
+      i.g_id = a.g_itemId and
       c.g_parentId = ".$db1->quote($parentId)." and 
       f.g_pathComponent=".$db1->quote($path[$level-1]).";
     ";
@@ -57,6 +54,8 @@ while(<STDIN>) {
   $title = $row[1];
   $summary = $row[2];
   $description = $row[3];
+  $weight = $row[5];
+  $views = $row[6];
   $ids[$level] = $row[0];
 
   if( $row[4] == 0 ) {
@@ -106,5 +105,15 @@ while(<STDIN>) {
     $sth = $db2->prepare($query);
     $sth->execute;
     $sth->finish;
+
+    # get highlight picture 
+    $query = "
+      SELECT d2.g_derivativeSourceId 
+      FROM g2_ChildEntity c, g2_Derivative d1, g2_Derivative d2  
+      WHERE c.g_id = d1.g_id 
+      AND d1.g_derivativeSourceId=d2.g_id 
+      AND c.g_parentId = ".$ids[$level];
+ 
+    # set sort weight
  }
 }
