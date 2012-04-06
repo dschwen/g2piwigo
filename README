@@ -6,10 +6,11 @@ The following properties are preserved:
 * Titles, summaries, and descriptions for images and (sub)albums
 * Sort order for (sub)albums
 * Highlight images for (sub)albums
+* Photo comments
 
 The following properties are not (yet) converted:
 
-* comments
+* Album comments (piwigo does not support those)
 * ratings
 * keywords
 * thumbnails

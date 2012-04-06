@@ -78,6 +78,14 @@ while(<STDIN>) {
     $sth = $db2->prepare($query);
     $sth->execute;
     $sth->finish;
+
+    # build a map from gallery2 ids to piwigo image ids
+    $query = "SELECT id FROM piwigo_images WHERE path = ".$db2->quote("./galleries/".$dir);
+    $sth = $db2->prepare($query);
+    $sth->execute;
+    ($iid{$row[0]}) = $sth->fetchrow();
+    $sth->finish;
+
   } else {
     # folder
     $comment = "";
@@ -131,7 +139,6 @@ while(<STDIN>) {
 }
 
 # apply highlites as representative images
-
 while(($key, $value) = each(%hid)) {
   print "$key $value $pid{$value}\n";  
 
@@ -149,3 +156,28 @@ while(($key, $value) = each(%hid)) {
   $sth->execute;
   $sth->finish;
 }
+
+# copy comments
+$query = "
+  SELECT c.g_parentId, t.g_subject, t.g_comment, t.g_author, t.g_date
+  FROM g2_ChildEntity c, g2_Comment t  
+  WHERE t.g_id = c.g_id 
+  AND t.g_publishStatus=0";
+$sth2 = $db1->prepare($query);
+$sth2->execute;
+while( ($id,$subject,$comment,$author,$date) = $sth2->fetchrow() ) {
+  # FROM_UNIXTIME($date)
+  if( $iid{$id} ) {
+    if( $subject ne "" ) {
+      $comment = "<b>$subject</b> $comment";
+    }
+    $query = "INSERT INTO piwigo_comments (image_id,date,author,content,validated) VALUES (".$db2->quote($iid{$id}).",FROM_UNIXTIME($date),".$db2->quote($author).",".$db2->quote($comment).",True)";
+    print "$query\n";
+    $sth = $db2->prepare($query);
+    $sth->execute;
+    $sth->finish;
+  }
+}
+$sth->finish;
+
+
