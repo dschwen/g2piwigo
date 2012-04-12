@@ -2,7 +2,7 @@
 
 my $usage = "\n
     in the piwigo galleries folder do\n
-    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-prexif=gl2_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
+    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-prefix=gl2_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
 
 use DBI;
 use DBD::mysql;
