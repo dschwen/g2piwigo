@@ -1,22 +1,70 @@
 #!/usr/bin/perl
 
-if( int(@ARGV) != 4 ) {
-  print "
-    in the piwigo galleries folder do
-    find |grep -v /thumbnail | cut -c3- | ../convertcomments.pl g2_database g2_db_password piwigo_database piwigo_db_password\n";
-  exit;
-}
+my $usage = "\n
+    in the piwigo galleries folder do\n
+    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-prexif=gl2_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
 
 use DBI;
 use DBD::mysql;
+use Getopt::Long;
 
-$ds1 = "dbi:mysql:wikimini_gallery2:localhost:3306";
-$db1 = DBI->connect( $ds1, $ARGV[0], $ARGV[1],
-                  { PrintError => 1}) || die $DBI::errstr;
+my @opt_mandatory = qw/
+    menalto-dbname=s
+    menalto-dbuser=s
+    menalto-dbpass=s
+    piwigo-dbname=s
+    piwigo-dbuser=s
+    piwigo-dbpass=s
+/;
 
-$ds2 = "dbi:mysql:wikimini_piwigo:localhost:3306";
-$db2 = DBI->connect( $ds2, $ARGV[2], $ARGV[3],
-                  { PrintError => 1}) || die $DBI::errstr;
+my @opt_optional = qw/
+    menalto-dbhost=s
+    menalto-prefix=s
+    piwigo-dbhost=s
+    piwigo-prefix=s
+/;
+
+my %opt = ();
+GetOptions(
+    \%opt,
+    @opt_mandatory,
+    @opt_optional
+);
+
+# use Data::Dumper; print Dumper(\%opt); exit();
+
+foreach my $param (@opt_mandatory) {
+    $param =~ s/=s$//;
+    if (not defined $opt{$param}) {
+        print '--'.$param.' is mandatory'."\n";
+        print $usage;
+        exit();
+    }
+}
+
+if (not defined $opt{'menalto-dbhost'}) {
+    $opt{'menalto-dbhost'} = 'localhost'; 
+}
+
+if (not defined $opt{'menalto-prefix'}) {
+    $opt{'menalto-prefix'} = 'g_'; 
+}
+
+if (not defined $opt{'piwigo-dbhost'}) {
+    $opt{'piwigo-dbhost'} = 'localhost'; 
+}
+
+if (not defined $opt{'piwigo-prefix'}) {
+    $opt{'piwigo-prefix'} = '';
+}
+
+$ds1 = "dbi:mysql:".$opt{'menalto-dbname'}.":".$opt{'menalto-dbhost'}.":3306";
+$db1 = DBI->connect( $ds1, $opt{'menalto-dbuser'}, $opt{'menalto-dbpass'}, { PrintError => 1})
+    or die $DBI::errstr;
+
+$ds2 = "dbi:mysql:".$opt{'piwigo-dbname'}.":".$opt{'piwigo-dbhost'}.":3306";
+$db2 = DBI->connect( $ds2, $opt{'piwigo-dbuser'}, $opt{'piwigo-dbpass'}, { PrintError => 1})
+    or die $DBI::errstr;
 
 # Gallery2 parent Ids (root is always 7!)
 @ids = ( 7,0,0,0,0,0 );
@@ -35,28 +83,35 @@ while(<STDIN>) {
 
   # get id and title/summary/description of tail element in path  
   $query = "
-    SELECT 
-      f.g_id, i.g_title, i.g_summary, i.g_description, i.g_canContainChildren, a.g_orderWeight, a.g_viewCount 
-    FROM 
-      g2_FileSystemEntity f, g2_ChildEntity c, g2_Item i, g2_ItemAttributesMap a 
-    WHERE 
-      i.g_id = f.g_id AND 
-      f.g_id = c.g_id AND 
-      i.g_id = a.g_itemId AND
-      c.g_parentId = ".$db1->quote($parentId)." AND 
-      f.g_pathComponent=".$db1->quote($path[$level-1]).";
-    ";
+SELECT 
+    f.".$opt{'menalto-prefix'}."id,
+    i.".$opt{'menalto-prefix'}."title,
+    i.".$opt{'menalto-prefix'}."summary,
+    i.".$opt{'menalto-prefix'}."description,
+    i.".$opt{'menalto-prefix'}."canContainChildren,
+    a.".$opt{'menalto-prefix'}."orderWeight,
+    a.".$opt{'menalto-prefix'}."viewCount,
+    FROM_UNIXTIME(e.".$opt{'menalto-prefix'}."creationTimestamp)
+  FROM ".$opt{'menalto-prefix'}."Item i
+    JOIN ".$opt{'menalto-prefix'}."FileSystemEntity f ON i.".$opt{'menalto-prefix'}."id = f.".$opt{'menalto-prefix'}."id
+    JOIN ".$opt{'menalto-prefix'}."ChildEntity c ON f.".$opt{'menalto-prefix'}."id = c.".$opt{'menalto-prefix'}."id
+    JOIN ".$opt{'menalto-prefix'}."ItemAttributesMap a ON i.".$opt{'menalto-prefix'}."id = a.".$opt{'menalto-prefix'}."itemId
+    JOIN ".$opt{'menalto-prefix'}."Entity e ON e.".$opt{'menalto-prefix'}."id = i.".$opt{'menalto-prefix'}."id
+  WHERE c.".$opt{'menalto-prefix'}."parentId = ".$db1->quote($parentId)."
+    AND f.".$opt{'menalto-prefix'}."pathComponent=".$db1->quote($path[$level-1])."
+;";
   $sth = $db1->prepare($query);
   $sth->execute;
   @row = $sth->fetchrow();
   $sth->finish;
 
   #print "$row[4] - $parentId -> $row[0] : $row[1] $row[2] $row[3]\n";
-  $title = $row[1];
-  $summary = $row[2];
-  $description = $row[3];
+  $title = remove_bbcode($row[1]);
+  $summary = remove_bbcode($row[2]);
+  $description = remove_bbcode($row[3]);
   $weight = $row[5];
   $views = $row[6];
+  $date_available = $row[7];
   $ids[$level] = $row[0];
   $pid{$row[0]}=$dir;
 
@@ -73,14 +128,19 @@ while(<STDIN>) {
       }
     }
 
-    $query = "UPDATE piwigo_images SET name=".$db2->quote($title).", comment=".$db2->quote($comment)." WHERE path = ".$db2->quote("./galleries/".$dir)." ";
+    $query = "
+UPDATE ".$opt{'piwigo-prefix'}."images
+  SET name=".$db2->quote($title)."
+    , comment=".$db2->quote($comment)."
+    , date_available='".$date_available."'
+  WHERE path = ".$db2->quote("./galleries/".$dir)." ";
     print "$query\n";
     $sth = $db2->prepare($query);
     $sth->execute;
     $sth->finish;
 
     # build a map from gallery2 ids to piwigo image ids
-    $query = "SELECT id FROM piwigo_images WHERE path = ".$db2->quote("./galleries/".$dir);
+    $query = "SELECT id FROM ".$opt{'piwigo-prefix'}."images WHERE path = ".$db2->quote("./galleries/".$dir);
     $sth = $db2->prepare($query);
     $sth->execute;
     ($iid{$row[0]}) = $sth->fetchrow();
@@ -90,7 +150,7 @@ while(<STDIN>) {
     # folder
     $comment = "";
     if( $summary ne "" && $description ne "" ) {
-      $comment = "$summary <!--complete> $description";
+      $comment = "$summary <!--complete--> $description";
     } else {
       if( $summary ne "" ) {
         $comment = $summary;
@@ -102,7 +162,7 @@ while(<STDIN>) {
     # get piwigo category id
     $uc = "= ".$uct[$level-1];
     $uc = "IS NULL" if( $uct[$level-1] eq "NULL" );
-    $query = "SELECT id FROM piwigo_categories WHERE dir = ".$db2->quote($path[$level-1])." AND id_uppercat $uc";
+    $query = "SELECT id FROM ".$opt{'piwigo-prefix'}."categories WHERE dir = ".$db2->quote($path[$level-1])." AND id_uppercat $uc";
     $sth = $db2->prepare($query);
     $sth->execute;
     @row = $sth->fetchrow();
@@ -118,7 +178,7 @@ while(<STDIN>) {
     $grank .= $weight;
     $ranks[$level]=$weight;
 
-    $query = "UPDATE piwigo_categories SET name=".$db2->quote($title).", comment=".$db2->quote($comment).", rank=$weight, global_rank=".$db2->quote($grank)." WHERE id = $id";
+    $query = "UPDATE ".$opt{'piwigo-prefix'}."categories SET name=".$db2->quote($title).", comment=".$db2->quote($comment).", rank=$weight, global_rank=".$db2->quote($grank)." WHERE id = $id";
     print "$query\n";
     $sth = $db2->prepare($query);
     $sth->execute;
@@ -126,11 +186,11 @@ while(<STDIN>) {
 
     # get highlight picture 
     $query = "
-      SELECT d2.g_derivativeSourceId 
-      FROM g2_ChildEntity c, g2_Derivative d1, g2_Derivative d2  
-      WHERE c.g_id = d1.g_id 
-      AND d1.g_derivativeSourceId=d2.g_id 
-      AND c.g_parentId = ".$ids[$level];
+SELECT d2.".$opt{'menalto-prefix'}."derivativeSourceId 
+  FROM ".$opt{'menalto-prefix'}."ChildEntity c
+    JOIN ".$opt{'menalto-prefix'}."Derivative d1 ON c.".$opt{'menalto-prefix'}."id = d1.".$opt{'menalto-prefix'}."id
+    JOIN ".$opt{'menalto-prefix'}."Derivative d2 ON d1.".$opt{'menalto-prefix'}."derivativeSourceId=d2.".$opt{'menalto-prefix'}."id
+  WHERE c.".$opt{'menalto-prefix'}."parentId = ".$ids[$level];
     $sth = $db1->prepare($query);
     $sth->execute;
     ($hid{$id}) = $sth->fetchrow();
@@ -143,14 +203,14 @@ while(($key, $value) = each(%hid)) {
   print "$key $value $pid{$value}\n";  
 
   # get piwigo picture id
-  $query="SELECT id from piwigo_images WHERE path = ".$db2->quote("./galleries/".$pid{$value});
+  $query="SELECT id from ".$opt{'piwigo-prefix'}."images WHERE path = ".$db2->quote("./galleries/".$pid{$value});
   print "$query\n";
   $sth = $db2->prepare($query);
   $sth->execute;
   ($id) = $sth->fetchrow();
   $sth->finish;
 
-  $query = "UPDATE piwigo_categories SET representative_picture_id =".$db2->quote($id)." WHERE id = ".$db2->quote($key);
+  $query = "UPDATE ".$opt{'piwigo-prefix'}."categories SET representative_picture_id =".$db2->quote($id)." WHERE id = ".$db2->quote($key);
   print "$query\n";
   $sth = $db2->prepare($query);
   $sth->execute;
@@ -159,10 +219,16 @@ while(($key, $value) = each(%hid)) {
 
 # copy comments
 $query = "
-  SELECT c.g_parentId, t.g_subject, t.g_comment, t.g_author, t.g_date
-  FROM g2_ChildEntity c, g2_Comment t  
-  WHERE t.g_id = c.g_id 
-  AND t.g_publishStatus=0";
+SELECT
+    c.".$opt{'menalto-prefix'}."parentId,
+    t.".$opt{'menalto-prefix'}."subject,
+    t.".$opt{'menalto-prefix'}."comment,
+    t.".$opt{'menalto-prefix'}."author,
+    t.".$opt{'menalto-prefix'}."date
+  FROM ".$opt{'menalto-prefix'}."ChildEntity c
+    JOIN ".$opt{'menalto-prefix'}."Comment t ON t.".$opt{'menalto-prefix'}."id = c.".$opt{'menalto-prefix'}."id
+  WHERE t.".$opt{'menalto-prefix'}."publishStatus=0
+";
 $sth2 = $db1->prepare($query);
 $sth2->execute;
 while( ($id,$subject,$comment,$author,$date) = $sth2->fetchrow() ) {
@@ -171,7 +237,7 @@ while( ($id,$subject,$comment,$author,$date) = $sth2->fetchrow() ) {
     if( $subject ne "" ) {
       $comment = "<b>$subject</b> $comment";
     }
-    $query = "INSERT INTO piwigo_comments (image_id,date,author,content,validated) VALUES (".$db2->quote($iid{$id}).",FROM_UNIXTIME($date),".$db2->quote($author).",".$db2->quote($comment).",True)";
+    $query = "INSERT INTO ".$opt{'piwigo-prefix'}."comments (image_id,date,author,content,validated) VALUES (".$db2->quote($iid{$id}).",FROM_UNIXTIME($date),".$db2->quote($author).",".$db2->quote($comment).",True)";
     print "$query\n";
     $sth = $db2->prepare($query);
     $sth->execute;
@@ -180,4 +246,15 @@ while( ($id,$subject,$comment,$author,$date) = $sth2->fetchrow() ) {
 }
 $sth->finish;
 
+sub remove_bbcode() {
+  my ($title) = @_;
 
+  $title =~ s{\[color=\w+\]}{}g;
+  $title =~ s{\[/color\]}{}g;
+  $title =~ s{\[b\]}{}g;
+  $title =~ s{\[/b\]}{}g;
+  $title =~ s{\[i\]}{}g;
+  $title =~ s{\[/i\]}{}g;
+
+  return $title;
+}
