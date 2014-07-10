@@ -2,7 +2,7 @@
 
 my $usage = "\n
     in the piwigo galleries folder do\n
-    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-prefix=gl2_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
+    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-table-prefix=gl2_ --menalto-column-prefix=g_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
 
 use DBI;
 use DBD::mysql;
@@ -19,7 +19,8 @@ my @opt_mandatory = qw/
 
 my @opt_optional = qw/
     menalto-dbhost=s
-    menalto-prefix=s
+    menalto-table-prefix=s
+    menalto-column-prefix=s
     piwigo-dbhost=s
     piwigo-prefix=s
 /;
@@ -43,15 +44,19 @@ foreach my $param (@opt_mandatory) {
 }
 
 if (not defined $opt{'menalto-dbhost'}) {
-    $opt{'menalto-dbhost'} = 'localhost'; 
+    $opt{'menalto-dbhost'} = 'localhost';
 }
 
-if (not defined $opt{'menalto-prefix'}) {
-    $opt{'menalto-prefix'} = 'g_'; 
+if (not defined $opt{'menalto-table-prefix'}) {
+    $opt{'menalto-table-prefix'} = 'g_';
+}
+
+if (not defined $opt{'menalto-column-prefix'}) {
+    $opt{'menalto-column-prefix'} = '';
 }
 
 if (not defined $opt{'piwigo-dbhost'}) {
-    $opt{'piwigo-dbhost'} = 'localhost'; 
+    $opt{'piwigo-dbhost'} = 'localhost';
 }
 
 if (not defined $opt{'piwigo-prefix'}) {
@@ -81,25 +86,26 @@ while(<STDIN>) {
 
   $parentId = $ids[$level-1];
 
-  # get id and title/summary/description of tail element in path  
+  # get id and title/summary/description of tail element in path
   $query = "
-SELECT 
-    f.".$opt{'menalto-prefix'}."id,
-    i.".$opt{'menalto-prefix'}."title,
-    i.".$opt{'menalto-prefix'}."summary,
-    i.".$opt{'menalto-prefix'}."description,
-    i.".$opt{'menalto-prefix'}."canContainChildren,
-    a.".$opt{'menalto-prefix'}."orderWeight,
-    a.".$opt{'menalto-prefix'}."viewCount,
-    FROM_UNIXTIME(e.".$opt{'menalto-prefix'}."creationTimestamp)
-  FROM ".$opt{'menalto-prefix'}."Item i
-    JOIN ".$opt{'menalto-prefix'}."FileSystemEntity f ON i.".$opt{'menalto-prefix'}."id = f.".$opt{'menalto-prefix'}."id
-    JOIN ".$opt{'menalto-prefix'}."ChildEntity c ON f.".$opt{'menalto-prefix'}."id = c.".$opt{'menalto-prefix'}."id
-    JOIN ".$opt{'menalto-prefix'}."ItemAttributesMap a ON i.".$opt{'menalto-prefix'}."id = a.".$opt{'menalto-prefix'}."itemId
-    JOIN ".$opt{'menalto-prefix'}."Entity e ON e.".$opt{'menalto-prefix'}."id = i.".$opt{'menalto-prefix'}."id
-  WHERE c.".$opt{'menalto-prefix'}."parentId = ".$db1->quote($parentId)."
-    AND f.".$opt{'menalto-prefix'}."pathComponent=".$db1->quote($path[$level-1])."
+SELECT
+    f.".$opt{'menalto-column-prefix'}."id,
+    i.".$opt{'menalto-column-prefix'}."title,
+    i.".$opt{'menalto-column-prefix'}."summary,
+    i.".$opt{'menalto-column-prefix'}."description,
+    i.".$opt{'menalto-column-prefix'}."canContainChildren,
+    a.".$opt{'menalto-column-prefix'}."orderWeight,
+    a.".$opt{'menalto-column-prefix'}."viewCount,
+    FROM_UNIXTIME(e.".$opt{'menalto-column-prefix'}."creationTimestamp)
+  FROM ".$opt{'menalto-table-prefix'}."Item i
+    JOIN ".$opt{'menalto-table-prefix'}."FileSystemEntity f ON i.".$opt{'menalto-column-prefix'}."id = f.".$opt{'menalto-column-prefix'}."id
+    JOIN ".$opt{'menalto-table-prefix'}."ChildEntity c ON f.".$opt{'menalto-column-prefix'}."id = c.".$opt{'menalto-column-prefix'}."id
+    JOIN ".$opt{'menalto-table-prefix'}."ItemAttributesMap a ON i.".$opt{'menalto-column-prefix'}."id = a.".$opt{'menalto-column-prefix'}."itemId
+    JOIN ".$opt{'menalto-table-prefix'}."Entity e ON e.".$opt{'menalto-column-prefix'}."id = i.".$opt{'menalto-column-prefix'}."id
+  WHERE c.".$opt{'menalto-column-prefix'}."parentId = ".$db1->quote($parentId)."
+    AND f.".$opt{'menalto-column-prefix'}."pathComponent=".$db1->quote($path[$level-1])."
 ;";
+
   $sth = $db1->prepare($query);
   $sth->execute;
   @row = $sth->fetchrow();
@@ -184,13 +190,13 @@ UPDATE ".$opt{'piwigo-prefix'}."images
     $sth->execute;
     $sth->finish;
 
-    # get highlight picture 
+    # get highlight picture
     $query = "
-SELECT d2.".$opt{'menalto-prefix'}."derivativeSourceId 
-  FROM ".$opt{'menalto-prefix'}."ChildEntity c
-    JOIN ".$opt{'menalto-prefix'}."Derivative d1 ON c.".$opt{'menalto-prefix'}."id = d1.".$opt{'menalto-prefix'}."id
-    JOIN ".$opt{'menalto-prefix'}."Derivative d2 ON d1.".$opt{'menalto-prefix'}."derivativeSourceId=d2.".$opt{'menalto-prefix'}."id
-  WHERE c.".$opt{'menalto-prefix'}."parentId = ".$ids[$level];
+SELECT d2.".$opt{'menalto-column-prefix'}."derivativeSourceId
+  FROM ".$opt{'menalto-table-prefix'}."ChildEntity c
+    JOIN ".$opt{'menalto-table-prefix'}."Derivative d1 ON c.".$opt{'menalto-column-prefix'}."id = d1.".$opt{'menalto-column-prefix'}."id
+    JOIN ".$opt{'menalto-table-prefix'}."Derivative d2 ON d1.".$opt{'menalto-column-prefix'}."derivativeSourceId=d2.".$opt{'menalto-column-prefix'}."id
+  WHERE c.".$opt{'menalto-column-prefix'}."parentId = ".$ids[$level];
     $sth = $db1->prepare($query);
     $sth->execute;
     ($hid{$id}) = $sth->fetchrow();
@@ -200,7 +206,7 @@ SELECT d2.".$opt{'menalto-prefix'}."derivativeSourceId
 
 # apply highlites as representative images
 while(($key, $value) = each(%hid)) {
-  print "$key $value $pid{$value}\n";  
+  print "$key $value $pid{$value}\n";
 
   # get piwigo picture id
   $query="SELECT id from ".$opt{'piwigo-prefix'}."images WHERE path = ".$db2->quote("./galleries/".$pid{$value});
@@ -220,14 +226,14 @@ while(($key, $value) = each(%hid)) {
 # copy comments
 $query = "
 SELECT
-    c.".$opt{'menalto-prefix'}."parentId,
-    t.".$opt{'menalto-prefix'}."subject,
-    t.".$opt{'menalto-prefix'}."comment,
-    t.".$opt{'menalto-prefix'}."author,
-    t.".$opt{'menalto-prefix'}."date
-  FROM ".$opt{'menalto-prefix'}."ChildEntity c
-    JOIN ".$opt{'menalto-prefix'}."Comment t ON t.".$opt{'menalto-prefix'}."id = c.".$opt{'menalto-prefix'}."id
-  WHERE t.".$opt{'menalto-prefix'}."publishStatus=0
+    c.".$opt{'menalto-column-prefix'}."parentId,
+    t.".$opt{'menalto-column-prefix'}."subject,
+    t.".$opt{'menalto-column-prefix'}."comment,
+    t.".$opt{'menalto-column-prefix'}."author,
+    t.".$opt{'menalto-column-prefix'}."date
+  FROM ".$opt{'menalto-table-prefix'}."ChildEntity c
+    JOIN ".$opt{'menalto-table-prefix'}."Comment t ON t.".$opt{'menalto-column-prefix'}."id = c.".$opt{'menalto-column-prefix'}."id
+  WHERE t.".$opt{'menalto-column-prefix'}."publishStatus=0
 ";
 $sth2 = $db1->prepare($query);
 $sth2->execute;
@@ -251,10 +257,13 @@ sub remove_bbcode() {
 
   $title =~ s{\[color=\w+\]}{}g;
   $title =~ s{\[/color\]}{}g;
-  $title =~ s{\[b\]}{}g;
-  $title =~ s{\[/b\]}{}g;
-  $title =~ s{\[i\]}{}g;
-  $title =~ s{\[/i\]}{}g;
+
+  $title =~ s{\[b\]}{<b>}g;
+  $title =~ s{\[/b\]}{</b>}g;
+  $title =~ s{\[i\]}{<i>}g;
+  $title =~ s{\[/i\]}{</i>}g;
+
+  $title =~ s{\[url *= *([^\]]+)\]([^\[]+)\[/url\]}{<a href="\1">\2</a>}g;
 
   return $title;
 }
