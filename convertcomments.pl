@@ -257,10 +257,13 @@ sub remove_bbcode() {
 
   $title =~ s{\[color=\w+\]}{}g;
   $title =~ s{\[/color\]}{}g;
-  $title =~ s{\[b\]}{}g;
-  $title =~ s{\[/b\]}{}g;
-  $title =~ s{\[i\]}{}g;
-  $title =~ s{\[/i\]}{}g;
+
+  $title =~ s{\[b\]}{<b>}g;
+  $title =~ s{\[/b\]}{</b>}g;
+  $title =~ s{\[i\]}{<i>}g;
+  $title =~ s{\[/i\]}{</i>}g;
+
+  $title =~ s{\[url *= *([^\]]+)\]([^\[]+)\[/url\]}{<a href="\1">\2</a>}g;
 
   return $title;
 }
