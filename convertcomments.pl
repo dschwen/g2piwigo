@@ -2,10 +2,11 @@
 
 my $usage = "\n
     in the piwigo galleries folder do\n
-    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-table-prefix=gl2_ --menalto-column-prefix=g_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
+    find | grep -v /thumbnail | grep -v /pwg_high | cut -c3- | ../convertcomments.pl --menalto-dbname=gl2_database --menalto-dbuser= --menalto-dbpass=gl2_db_password --menalto-dbtype=mysql_or_pg --menalto-table-prefix=gl2_ --menalto-column-prefix=g_ --piwigo-dbname=piwigo_database --piwigo-dbuser=piwigo --piwigo-dbpass=piwigo_db_password\n";
 
 use DBI;
 use DBD::mysql;
+use DBD::Pg;
 use Getopt::Long;
 
 my @opt_mandatory = qw/
@@ -21,6 +22,7 @@ my @opt_optional = qw/
     menalto-dbhost=s
     menalto-table-prefix=s
     menalto-column-prefix=s
+    menalto-dbtype=s
     piwigo-dbhost=s
     piwigo-prefix=s
 /;
@@ -55,6 +57,10 @@ if (not defined $opt{'menalto-column-prefix'}) {
     $opt{'menalto-column-prefix'} = '';
 }
 
+if (not defined $opt{'menalto-dbtype'}) {
+    $opt{'menalto-dbtype'} = 'mysql';
+}
+
 if (not defined $opt{'piwigo-dbhost'}) {
     $opt{'piwigo-dbhost'} = 'localhost';
 }
@@ -63,7 +69,11 @@ if (not defined $opt{'piwigo-prefix'}) {
     $opt{'piwigo-prefix'} = '';
 }
 
-$ds1 = "dbi:mysql:".$opt{'menalto-dbname'}.":".$opt{'menalto-dbhost'}.":3306";
+if ($opt{'menalto-dbtype'} eq 'pg') {
+  $ds1 = "dbi:Pg:dbname=".$opt{'menalto-dbname'}.";host=".$opt{'menalto-dbhost'};
+} else {
+  $ds1 = "dbi:mysql:".$opt{'menalto-dbname'}.":".$opt{'menalto-dbhost'}.":3306";
+}
 $db1 = DBI->connect( $ds1, $opt{'menalto-dbuser'}, $opt{'menalto-dbpass'}, { PrintError => 1})
     or die $DBI::errstr;
 
@@ -87,6 +97,11 @@ while(<STDIN>) {
   $parentId = $ids[$level-1];
 
   # get id and title/summary/description of tail element in path
+  if ($opt{'menalto-dbtype'} eq 'pg') {
+    $creationTimestamp = "TO_CHAR(TO_TIMESTAMP(e.".$opt{'menalto-column-prefix'}."creationTimestamp), 'YYYY-MM-DD HH24:MI:SS')";
+  } else {
+    $creationTimestamp = "FROM_UNIXTIME(e.".$opt{'menalto-column-prefix'}."creationTimestamp)";
+  }
   $query = "
 SELECT
     f.".$opt{'menalto-column-prefix'}."id,
@@ -96,7 +111,7 @@ SELECT
     i.".$opt{'menalto-column-prefix'}."canContainChildren,
     a.".$opt{'menalto-column-prefix'}."orderWeight,
     a.".$opt{'menalto-column-prefix'}."viewCount,
-    FROM_UNIXTIME(e.".$opt{'menalto-column-prefix'}."creationTimestamp)
+    $creationTimestamp
   FROM ".$opt{'menalto-table-prefix'}."Item i
     JOIN ".$opt{'menalto-table-prefix'}."FileSystemEntity f ON i.".$opt{'menalto-column-prefix'}."id = f.".$opt{'menalto-column-prefix'}."id
     JOIN ".$opt{'menalto-table-prefix'}."ChildEntity c ON f.".$opt{'menalto-column-prefix'}."id = c.".$opt{'menalto-column-prefix'}."id
